@@ -1,0 +1,272 @@
+/*****************************************************************************
+* | File      	:   OLED_0in96.c
+* | Author      :   Waveshare team
+* | Function    :   OLED_0in96 OLED Module Drive function
+* | Info        :
+*----------------
+* |	This version:   V2.0
+* | Date        :   2020-08-14
+* | Info        :
+* -----------------------------------------------------------------------------
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documnetation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to  whom the Software is
+# furished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS OR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+#
+******************************************************************************/
+#include "OLED_0in96.h"
+#include "stdio.h"
+
+#define vccstate SSD1306_SWITCHCAPVCC
+
+/*******************************************************************************
+function:
+			Hardware reset
+*******************************************************************************/
+static void OLED_0in96_Reset(void)
+{
+    OLED_RST_1;
+    delay_ms(100);
+    OLED_RST_0;
+    delay_ms(100);
+    OLED_RST_1;
+    delay_ms(100);
+}
+
+/*******************************************************************************
+function:
+			Write register address and data
+*******************************************************************************/
+static void OLED_0in96_WriteReg(uint8_t Reg)
+{
+#ifdef USE_SPI_4W
+    OLED_DC_0;
+    OLED_CS_0;
+    SPI4W_Write_Byte(Reg);
+    OLED_CS_1;
+#endif
+#ifdef USE_IIC_SOFT
+	iic_start();
+	iic_write_byte(0x78);
+	iic_wait_for_ack();
+	iic_write_byte(0x00);
+	iic_wait_for_ack();
+	iic_write_byte(Reg);
+	iic_wait_for_ack();
+	iic_stop();
+#endif
+}
+
+/*******************************************************************************
+function:
+			Common register initialization
+*******************************************************************************/
+static void OLED_0in96_WriteData(uint8_t Data)
+{	
+#ifdef USE_SPI_4W
+    OLED_DC_1;
+    OLED_CS_0;
+    SPI4W_Write_Byte(Data);
+    OLED_CS_1;
+#endif
+#ifdef USE_IIC_SOFT	
+	iic_start();
+	iic_write_byte(0x78);
+	iic_wait_for_ack();
+	iic_write_byte(0x40);
+	iic_wait_for_ack();
+	iic_write_byte(Data);
+	iic_wait_for_ack();
+	iic_stop();
+#endif
+}
+
+static void OLED_0in96_InitReg()
+{
+	OLED_0in96_WriteReg(SSD1306_DISPLAYOFF);
+    OLED_0in96_WriteReg(SSD1306_SETDISPLAYCLOCKDIV);
+    OLED_0in96_WriteReg(0x80);                              // the suggested ratio 0x80
+
+    OLED_0in96_WriteReg(SSD1306_SETMULTIPLEX);
+    OLED_0in96_WriteReg(0x3F);
+    OLED_0in96_WriteReg(SSD1306_SETDISPLAYOFFSET);
+    OLED_0in96_WriteReg(0x0);                               // no offset
+	OLED_0in96_WriteReg(SSD1306_SETSTARTLINE | 0x0);        // line #0
+	OLED_0in96_WriteReg(SSD1306_CHARGEPUMP);
+    OLED_0in96_WriteReg((vccstate == SSD1306_EXTERNALVCC) ? 0x10 : 0x14);
+
+    OLED_0in96_WriteReg(SSD1306_MEMORYMODE);
+    OLED_0in96_WriteReg(0x00);                              // 0x0 act like ks0108
+
+    OLED_0in96_WriteReg(SSD1306_SEGREMAP | 0x1);
+	OLED_0in96_WriteReg(SSD1306_COMSCANDEC);
+	OLED_0in96_WriteReg(SSD1306_SETCOMPINS);
+    OLED_0in96_WriteReg(0x12);           // TODO - calculate based on _rawHieght ?
+	OLED_0in96_WriteReg(SSD1306_SETCONTRAST);
+    OLED_0in96_WriteReg((vccstate == SSD1306_EXTERNALVCC) ? 0x9F : 0xCF);
+    OLED_0in96_WriteReg(SSD1306_SETPRECHARGE);
+    OLED_0in96_WriteReg((vccstate == SSD1306_EXTERNALVCC) ? 0x22 : 0xF1);
+    OLED_0in96_WriteReg(SSD1306_SETVCOMDETECT);
+    OLED_0in96_WriteReg(0x40);
+    OLED_0in96_WriteReg(SSD1306_DISPLAYALLON_RESUME);
+    OLED_0in96_WriteReg(SSD1306_NORMALDISPLAY);
+}
+
+/********************************************************************************
+function:
+			initialization
+********************************************************************************/
+void OLED_0in96_Init()
+{
+    //Hardware reset
+    OLED_0in96_Reset();
+
+    //Set the initialization register
+    OLED_0in96_InitReg();
+    delay_ms(200);
+
+    //Turn on the OLED display
+    OLED_0in96_WriteReg(0xaf);
+}
+
+/********************************************************************************
+function:
+			Clear screen
+********************************************************************************/
+void OLED_0in96_clear()
+{
+    UWORD j;
+	OLED_0in96_WriteReg(SSD1306_COLUMNADDR);
+	OLED_0in96_WriteReg(0);         //cloumn start address
+	OLED_0in96_WriteReg(OLED_0in96_HEIGHT -1); //cloumn end address
+	OLED_0in96_WriteReg(SSD1306_PAGEADDR);
+	OLED_0in96_WriteReg(0);         //page atart address
+	OLED_0in96_WriteReg(OLED_0in96_WIDTH/8 -1); //page end address
+    
+    for (j = 0; j < 1024; j++) {
+	        OLED_0in96_WriteData(0x00);
+    }
+}
+
+/********************************************************************************
+function:
+			Update all memory to OLED
+********************************************************************************/
+void OLED_0in96_display(const UBYTE *Image)
+{
+    UWORD j, i, temp;
+	OLED_0in96_WriteReg(SSD1306_COLUMNADDR);
+	OLED_0in96_WriteReg(0);         //cloumn start address
+	OLED_0in96_WriteReg(OLED_0in96_HEIGHT -1); //cloumn end address
+	OLED_0in96_WriteReg(SSD1306_PAGEADDR);
+	OLED_0in96_WriteReg(0);         //page atart address
+	OLED_0in96_WriteReg(OLED_0in96_WIDTH/8 -1); //page end address
+    
+    for (j = 0; j < 8; j++) {
+        for(i = 0; i < 128; i++) {
+            temp = Image[7-j + i*8];
+            OLED_0in96_WriteData(temp);
+        }
+    }
+}
+
+
+int OLED_0in96_test(void)
+{
+    printf("0.96inch OLED test demo\n");
+#ifdef USE_IIC
+	printf("Only USE_SPI_4W or USE_IIC_SOFT, Please revise DEV_Config.h !!!\r\n");
+	return -1;
+#endif
+#ifdef USE_SPI_4W
+	printf("USE_SPI_4W\r\n");
+#endif
+#ifdef USE_IIC_SOFT
+	printf("USE_IIC_SOFT\r\n");
+	OLED_CS_0;
+	OLED_DC_0;
+#endif
+      
+
+	
+    printf("OLED Init...\r\n");
+    OLED_0in96_Init();
+    delay_ms(500);  
+    // 0.Create a new image cache
+    UBYTE *BlackImage;
+    UWORD Imagesize = ((OLED_0in96_WIDTH%8==0)? (OLED_0in96_WIDTH/8): (OLED_0in96_WIDTH/8+1)) * OLED_0in96_HEIGHT;
+    if((BlackImage = (UBYTE *)malloc(Imagesize)) == NULL) {
+            printf("Failed to apply for black memory...\r\n");
+            return -1;
+    }
+    printf("Paint_NewImage\r\n");
+    Paint_NewImage(BlackImage, OLED_0in96_WIDTH, OLED_0in96_HEIGHT, 90, BLACK);  
+
+    printf("Drawing\r\n");
+    //1.Select Image
+    Paint_SelectImage(BlackImage);
+    delay_ms(500);
+    Paint_Clear(BLACK);
+    while(1) {
+        
+        // 2.Drawing on the image       
+        printf("Drawing:page 1\r\n");
+        Paint_DrawPoint(20, 10, WHITE, DOT_PIXEL_1X1, DOT_STYLE_DFT);
+        Paint_DrawPoint(30, 10, WHITE, DOT_PIXEL_2X2, DOT_STYLE_DFT);
+        Paint_DrawPoint(40, 10, WHITE, DOT_PIXEL_3X3, DOT_STYLE_DFT);
+        Paint_DrawLine(10, 10, 10, 20, WHITE, DOT_PIXEL_1X1, LINE_STYLE_SOLID);
+        Paint_DrawLine(20, 20, 20, 30, WHITE, DOT_PIXEL_1X1, LINE_STYLE_SOLID);
+        Paint_DrawLine(30, 30, 30, 40, WHITE, DOT_PIXEL_1X1, LINE_STYLE_DOTTED);
+        Paint_DrawLine(40, 40, 40, 50, WHITE, DOT_PIXEL_1X1, LINE_STYLE_DOTTED);
+        Paint_DrawCircle(60, 30, 15, WHITE, DOT_PIXEL_1X1, DRAW_FILL_EMPTY);
+        Paint_DrawCircle(100, 40, 20, WHITE, DOT_PIXEL_1X1, DRAW_FILL_FULL);            
+        Paint_DrawRectangle(50, 30, 60, 40, WHITE, DOT_PIXEL_1X1, DRAW_FILL_EMPTY);
+        Paint_DrawRectangle(90, 30, 110, 50, BLACK, DOT_PIXEL_1X1, DRAW_FILL_FULL);     
+        // 3.Show image on page1
+        OLED_0in96_display(BlackImage);
+        delay_ms(2000);         
+        Paint_Clear(BLACK);
+        
+        // Drawing on the image
+        printf("Drawing:page 2\r\n");           
+        Paint_DrawString_EN(10, 0, "waveshare", &Font16, WHITE, WHITE);
+        Paint_DrawString_EN(10, 17, "hello world", &Font8, WHITE, WHITE);
+        Paint_DrawNum(10, 30, 123.456789, &Font8, 4, WHITE, WHITE);
+        Paint_DrawNum(10, 43, 987654, &Font12, 5, WHITE, WHITE);
+        // Show image on page2
+        OLED_0in96_display(BlackImage);
+        delay_ms(2000); 
+        Paint_Clear(BLACK);     
+        
+        // Drawing on the image
+        printf("Drawing:page 3\r\n");
+        Paint_DrawString_CN(10, 0,"你好Abc", &Font12CN, WHITE, WHITE);
+        Paint_DrawString_CN(0, 20, "微雪电子", &Font24CN, WHITE, WHITE);
+        // Show image on page3
+        OLED_0in96_display(BlackImage);
+        delay_ms(2000);     
+        Paint_Clear(BLACK);     
+		
+		// show the array image
+        printf("Drawing:page 4\r\n");
+        OLED_0in96_display(gImage_0in96);
+        delay_ms(2000);     
+        Paint_Clear(BLACK);     
+
+    }
+}
+
